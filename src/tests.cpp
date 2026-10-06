@@ -1,4 +1,5 @@
 #include "tests.h"
+#include <cmath>
 
 // 练习1，实现库函数strlen
 int my_strlen(char *str) {
@@ -7,7 +8,11 @@ int my_strlen(char *str) {
      */
 
     // IMPLEMENT YOUR CODE HERE
-    return 0;
+    int len = 0;
+    while (str[len] != '\0') {
+        len++;
+    }
+    return len;
 }
 
 
@@ -19,6 +24,18 @@ void my_strcat(char *str_1, char *str_2) {
      */
 
     // IMPLEMENT YOUR CODE HERE
+    int i = 0;
+    while (str_1[i] != '\0'){
+        i++;
+    }
+
+    int j = 0;
+    while (str_2[j] != '\0'){
+        str_1[i] = str_2[j];
+        i++;
+        j++;
+    }
+    str_1[i] = '\0';
 }
 
 
@@ -31,6 +48,26 @@ char* my_strstr(char *s, char *p) {
      */
 
     // IMPLEMENT YOUR CODE HERE
+    int i = 0;
+    // 1. 外层循环： 遍历主串 s 的每一个可能起点
+    while (s[i] != '\0') {
+        int j = 0;
+
+        // 2. 内层循环：尝试匹配子串 p
+        while (p[j] != '\0' && s[i + j] == p[j]) {
+            j++;
+        }
+
+        // 3. 判断是否匹配成功
+        if (p[j] == '\0') {
+            // 如果 p 的字符全部匹配完，说明找到了
+            return &s[i]; // 返回主串中匹配起点的地址
+        }
+
+        i++; // 当前起点匹配失败，主串后移一位
+    }
+
+    // 4. 遍历完了都没找到
     return 0;
 }
 
@@ -96,6 +133,24 @@ void rgb2gray(float *in, float *out, int h, int w) {
      */
 
     // IMPLEMENT YOUR CODE HERE
+    // 1. 双重循环遍历每一个像素点
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            // 2. 计算当前像素在输入数组中的起始索引
+            int index = (y * w + x) * 3;
+
+            // 3. 提取 R, G, B 分量
+            float R = in[index];
+            float G = in[index + 1];
+            float B = in[index + 2];
+
+            // 4. 根据公式计算灰度值 V
+            float V = 0.1140 * B + 0.5870 * G + 0.2989 * R;
+
+            // 5. 将计算结果写入输出数组对应的位置
+            out[y * w + x] = V;
+        }
+    }
     // ...
 }
 
@@ -198,6 +253,52 @@ void resize(float *in, float *out, int h, int w, int c, float scale) {
 
     int new_h = h * scale, new_w = w * scale;
     // IMPLEMENT YOUR CODE HERE
+    // 目标图像的宽高已经在上方定义了： new_h 和 new_w
+    // 1. 遍历目标图像中的每一个像素点 (x, y)
+    for (int y = 0; y < new_h; y++) {
+        for (int x = 0; x < new_w; x++) {
+
+            // 2. 反向映射 ：找到该点在原图中的浮点坐标（x0, y0)
+            float x0 = x / scale;
+            float y0 = y / scale;
+
+            // 3. 找到原图中的四个邻居点
+            // static_cast<int> 相当于向下取整，找到左上角邻居点的坐标
+            int x1 = static_cast<int>(x0);
+            int y1 = static_cast<int>(y0);
+            int x2 = x1 + 1;
+            int y2 = y1 + 1;
+
+            // 4. 边界检查
+            // 防止坐标超出原图范围，造成越界读取导致程序崩溃
+            if (x1 >= w) x1 = w - 1;
+            if (y1 >= h) y1 = h - 1;
+            if (x2 >= w) x2 = w - 1;
+            if (y2 >= h) y2 = h - 1;
+
+            // 5, 计算权重（小数的部分，代表距离比例）
+            float dx = x0 - x1;
+            float dy = y0 - y1;
+
+            // 6.遍历每一个通道（如果是彩色图 c=3, 灰度图 c=1)
+            for (int ch = 0; ch < c; ch++) {
+                // 分别获取四个邻居点的像素值（注意多通道内存寻址方式）
+                float P1 = in[(y1 * w + x1) * c + ch];
+                float P2 = in[(y1 * w + x2) * c + ch];
+                float P3 = in[(y2 * w + x1) * c + ch];
+                float P4 = in[(y2 * w + x2) * c + ch];
+
+                // 7. 代入双线性插值化简公式
+                float Q = P1 * (1 - dx) * (1 - dy) + 
+                          P2 * dx * (1 - dy) +
+                          P3 * (1 - dx) * dy +
+                          P4 * dx * dy;
+
+                // 8. 将计算结果写入目标数组对应位置
+                out[(y * new_w + x) * c + ch] = Q;
+            }
+        }
+    }
 
 }
 
@@ -221,4 +322,38 @@ void hist_eq(float *in, int h, int w) {
      */
 
     // IMPLEMENT YOUR CODE HERE
+    // 1. 统计直方图（Histogram)
+    int hist[256] = {0}; // 存放每个灰度级出现的次数
+    int total_pixels = h * w;
+
+    for (int i = 0; i < total_pixels; i++) {
+        int val = static_cast<int>(in[i]); // 将浮点像素值转化为整数索引
+        if (val < 0) val = 0;
+        if (val >255) val = 255; // 安全边界处理
+        hist[val]++;
+    }
+
+    // 2. 计算累积分布函数（CDF)
+    int cdf[256] = {0};
+    int sum = 0;
+    for (int i = 0; i < 256; i++) {
+        sum += hist[i];
+        cdf[i] = sum;
+    }
+
+    // 3. 建立灰度映射表（Mapping Table)
+    // 修正：去掉cdf_min的减法，直接使用累积分布比例拉伸
+    float map[256];
+    for (int i = 0; i < 256; i++) {
+        map[i] = round(cdf[i] * 255.0f / total_pixels);
+    }
+
+    // 4. 应用映射，原地修改图像像素
+    for (int i = 0; i < total_pixels; i++) {
+        // 使用round确保像素值四舍五入，避免阶段导致偏暗
+        int val = round(in[i]);
+        if (val < 0) val = 0;
+        if (val > 255) val = 255;
+        in[i] = map[val];
+    }
 }
